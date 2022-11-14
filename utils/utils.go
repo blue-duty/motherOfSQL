@@ -1,7 +1,6 @@
 package utils
 
 import (
-	"fmt"
 	"github.com/google/uuid"
 	"math/rand"
 	"time"
@@ -16,7 +15,6 @@ func GenIntValue(len int) int {
 // GenStringValue gen string value randomly
 func GenStringValue(len int) string {
 	l := GenIntValue(len)
-	fmt.Println(l)
 	var str string
 	for i := 0; i < l; i++ {
 		str += string(rune(rand.Intn(26) + 97))

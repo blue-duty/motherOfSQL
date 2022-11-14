@@ -20,7 +20,7 @@ type column struct {
 }
 
 func main() {
-	t1 := time.Now()
+	fmt.Println(time.Now().Format("2006-01-02 15:04:05"))
 	var cMap sync.Map
 	cfg, err := config.ReadConfig("./config.yaml")
 	if err != nil {
@@ -52,7 +52,11 @@ func main() {
 		if strings.Contains(t, "(") {
 			c.len, _ = strconv.Atoi(utils.TakeParentheses(t))
 		} else {
-			c.len = 0
+			if c.typeName == "int" {
+				c.len = 11
+			} else {
+				c.len = 255
+			}
 		}
 		cMap.Store(name, c)
 	}
@@ -66,71 +70,52 @@ func main() {
 		_ = db2.Close()
 	}(db2)
 	// 2.1 get column name
-	var columns []string
-	var values []interface{}
-	cMap.Range(func(key, value interface{}) bool {
-		columns = append(columns, key.(string))
-		values = append(values, value.(column))
-		return true
-	})
-	fmt.Println(values)
 	// 2.2 generate sql
-	var m sync.Mutex
 	var wg sync.WaitGroup
 	for i := 0; i < cfg.Target.Count; i++ {
 		wg.Add(1)
 		go func() {
 			var sqlStr string
+			var sqlValue string
+			var i int
 			sqlStr = fmt.Sprintf("INSERT INTO %s (", cfg.Target.Table)
-			m.Lock()
-			for _, v := range columns {
-				sqlStr += v + ","
-			}
-			sqlStr = sqlStr[:len(sqlStr)-1] + ") VALUES ("
-			for i, v := range values {
-				if v.(column).pri == "PRI" {
-					if v.(column).auto == "auto_increment" {
-						sqlStr += "NULL,"
+			cMap.Range(func(key, value interface{}) bool {
+				sqlStr += key.(string) + ","
+				if value.(column).pri == "PRI" {
+					if value.(column).auto == "auto_increment" {
+						sqlValue += "NULL,"
 					} else {
-						if v.(column).typeName == "int" {
-							sqlStr += strconv.Itoa(i+1) + ","
+						if value.(column).typeName == "int" {
+							i++
+							sqlValue += strconv.Itoa(i) + ","
 						} else {
-							sqlStr += "'" + utils.UUID() + "',"
+							sqlValue += "'" + utils.UUID() + "',"
 						}
 					}
 				} else {
-					switch v.(column).typeName {
+					switch value.(column).typeName {
 					case "int":
-						if v.(column).len == 0 {
-							sqlStr += strconv.Itoa(utils.GenIntValue(1000)) + ","
+						if value.(column).len == 0 {
+							sqlValue += strconv.Itoa(utils.GenIntValue(1000)) + ","
 						} else {
-							sqlStr += strconv.Itoa(utils.GenIntValue(v.(column).len)*10) + ","
+							sqlValue += strconv.Itoa(utils.GenIntValue(value.(column).len)*10) + ","
 						}
 					case "char":
-						if v.(column).len == 0 {
-							sqlStr += "'" + utils.GenStringValue(200) + "',"
-						} else {
-							sqlStr += "'" + utils.GenStringValue(v.(column).len) + "',"
-						}
+						sqlValue += "'" + utils.GenStringValue(value.(column).len) + "',"
 					case "varchar":
-						if v.(column).len == 0 {
-							sqlStr += "'" + utils.GenStringValue(200) + "',"
-						} else {
-							sqlStr += "'" + utils.GenStringValue(v.(column).len) + "',"
-						}
+						sqlValue += "'" + utils.GenStringValue(value.(column).len) + "',"
 					case "datetime":
-						sqlStr += "'" + utils.GenDatetimeValue() + "',"
+						sqlValue += "'" + utils.GenDatetimeValue() + "',"
 					case "float":
-						sqlStr += strconv.FormatFloat(utils.GenFloatValue(), 'f', 2, 64) + ","
+						sqlValue += strconv.FormatFloat(utils.GenFloatValue(), 'f', 2, 64) + ","
 					case "text":
-						sqlStr += "'" + utils.GenChineseValue(10000) + "',"
+						sqlValue += "'" + utils.GenChineseValue(10000) + "',"
 					}
 				}
-
-			}
-			m.Unlock()
-			sqlStr = sqlStr[:len(sqlStr)-1] + ")"
-			fmt.Println(sqlStr)
+				return true
+			})
+			sqlStr = strings.TrimRight(sqlStr, ",") + ") VALUES (" + strings.TrimRight(sqlValue, ",") + ")"
+			//fmt.Println(sqlStr)
 			_, err = db2.Exec(sqlStr)
 			if err != nil {
 				panic(err)
@@ -139,5 +124,5 @@ func main() {
 		}()
 	}
 	wg.Wait()
-	fmt.Println(time.Since(t1).String())
+	fmt.Println(time.Now().Format("2006-01-02 15:04:05"))
 }
